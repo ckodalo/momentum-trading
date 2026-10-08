@@ -54,6 +54,9 @@ class MomentumTradingStrategy:
             execution_status="IN_PROGRESS",
         )
 
+        self.trading_executor.verify_paper_account(self.portfolio)
+        self.trading_executor.sync_portfolio_positions(self.portfolio)
+
         # Step 1: Update stock universe and calculate momentum scores
         stocks = self.momentum_calculator.update_stock_universe()
         momentum_scores = self.momentum_calculator.calculate_momentum_scores_bulk(
@@ -75,15 +78,15 @@ class MomentumTradingStrategy:
         rebalance_event.save()
 
         # Step 4: Execute trades
-        self.execute_trading_signals(buy_signals, sell_signals, rebalance_event)
+        completed = self.execute_trading_signals(buy_signals, sell_signals, rebalance_event)
 
         # Step 5: Update portfolio value
         self.portfolio.calculate_total_value()
         self.portfolio.save()
 
         rebalance_event.total_portfolio_value = self.portfolio.total_value
-        rebalance_event.execution_status = "COMPLETED"
-        rebalance_event.completed_at = timezone.now()
+        rebalance_event.execution_status = "COMPLETED" if completed else "IN_PROGRESS"
+        rebalance_event.completed_at = timezone.now() if completed else None
         rebalance_event.save()
 
         logger.info(f"Rebalance completed successfully for {calculation_date}")
@@ -174,43 +177,32 @@ class MomentumTradingStrategy:
         sell_signals: List[TradingSignal],
         rebalance_event: RebalanceEvent,
     ):
-        # Execute sell orders first to free up cash
-        sell_stocks = [signal.stock for signal in sell_signals]
+        # Only confirmed fills execute signals; stop while any order awaits a fill.
+        def mark_filled(signals, trades):
+            filled_stocks = {trade.stock_id for trade in trades if trade.status == "FILLED"}
+            for signal in signals:
+                if signal.stock_id in filled_stocks:
+                    signal.is_executed = True
+                    signal.executed_at = timezone.now()
+                    signal.save(update_fields=["is_executed", "executed_at"])
+
         sell_trades = self.trading_executor.execute_sell_orders(
-            self.portfolio, sell_stocks
+            self.portfolio, [s.stock for s in sell_signals],
+            user_secret=self.portfolio.snaptrade_user_secret,
         )
-
-        # Mark sell signals as executed
-        for signal in sell_signals:
-            signal.is_executed = True
-            signal.executed_at = timezone.now()
-            signal.save()
-
-        # Calculate total value available for buying
-        # This includes current cash plus proceeds from sells
-        total_sell_value = sum(
-            signal.target_value for signal in sell_signals if signal.target_value
-        )
-
-        available_for_buying = self.portfolio.current_cash + total_sell_value
-
-        # Execute buy orders
-        buy_stocks = [signal.stock for signal in buy_signals]
-        buy_trades = []
-        if buy_stocks and available_for_buying > 0:
-            buy_trades = self.trading_executor.execute_buy_orders(
-                self.portfolio, buy_stocks, available_for_buying
-            )
-
-            # Mark buy signals as executed
-            for signal in buy_signals:
-                signal.is_executed = True
-                signal.executed_at = timezone.now()
-                signal.save()
-
-        logger.info(
-            f"Executed {len(sell_trades)} sell orders and {len(buy_trades)} buy orders"
-        )
+        mark_filled(sell_signals, sell_trades)
+        if len(sell_trades) != len(sell_signals) or any(t.status != "FILLED" for t in sell_trades):
+            return False
+        # Use synced cash after confirmed sales, rather than estimated proceeds.
+        self.portfolio.refresh_from_db()
+        budget = self.trading_executor.get_available_cash_for_trading(self.portfolio)
+        buy_trades = self.trading_executor.execute_buy_orders(
+            self.portfolio, [s.stock for s in buy_signals], budget,
+            user_secret=self.portfolio.snaptrade_user_secret,
+        ) if buy_signals and budget > 0 else []
+        mark_filled(buy_signals, buy_trades)
+        self.portfolio.refresh_from_db()
+        return len(buy_trades) == len(buy_signals) and all(t.status == "FILLED" for t in buy_trades)
 
     def get_strategy_performance(self, days_back: int = 30) -> Dict:
         start_date = timezone.now().date() - timedelta(days=days_back)

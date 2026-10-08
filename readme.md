@@ -90,3 +90,30 @@ Choose other symbols or a historical calculation date with:
 ```
 
 Missing price data is reported; if no scores can be saved, the command exits with an error. Rankings include all saved scores for the selected calculation date. Existing scores for skipped stocks remain unchanged. With fewer than five scores, the current quintile method places all scores in quintile 1; use a larger stock universe for meaningful five-group comparisons.
+
+## Sync a connected SnapTrade portfolio
+
+Set `SNAPTRADE_CLIENT_ID` and `SNAPTRADE_CLIENT_SECRET` (the SnapTrade Consumer Key) in `project1/.env`. This integration uses Commercial API key authentication. On the existing portfolio in Django admin, save the SnapTrade user ID, user secret, and connected account ID. For paper trading, connect Alpaca Paper through SnapTrade.
+
+From `project1`, replace `1` with the portfolio ID shown in its admin edit URL:
+
+```powershell
+.\.venv\Scripts\python.exe manage.py sync_snaptrade_portfolio 1
+```
+
+The command reads the connected account's cash and positions, saves the USD balance and holdings, clears holdings no longer present, and recalculates total value. Refresh the portfolio detail page afterward. It submits no orders and leaves initial cash and trade history unchanged. Both responses are validated before any database changes. The current integer quantity model supports long, whole-share holdings only; fractional or short holdings stop the sync with an error. Missing prices or purchase costs and non-USD holdings also stop the sync. SnapTrade data freshness depends on the account's data-access plan; this command does not request a paid brokerage refresh. Order execution remains unfinished.
+
+## Submit and track a paper order
+
+Paper execution uses the saved Commercial SnapTrade credentials and requires account metadata to identify the connected institution as Alpaca Paper. Orders use positive whole-share quantities and day limit prices. The one-order test command allows one share and a limit of at most USD 500. Choose a limit price based on the current Alpaca Paper quote; an order may remain open if that limit cannot be met. From `project1`:
+
+```powershell
+.\.venv\Scripts\python.exe manage.py paper_order 1 AAPL --limit-price 250.00
+.\.venv\Scripts\python.exe manage.py refresh_snaptrade_orders 1
+```
+
+The first command submits an order and prints the local trade ID. It does not claim the order filled. The second reads brokerage order details, stores partial/full fill quantities and execution prices, and synchronizes cash and positions from the brokerage snapshot. Refresh the portfolio detail page to see the result. Repeat the refresh command later if the order is still submitted. An order may wait until market hours or expire. Never rerun the submission command merely to check status.
+
+Only one unresolved order is allowed per portfolio. If submission times out or returns no brokerage order ID, the trade stays pending because the broker may have accepted it. Inspect Alpaca Paper and reconcile that trade before retrying; do not mark it rejected unless you have confirmed no order exists. Brokerage snapshots are authoritative, so fills are not separately added to holdings or deducted from cash. This prevents double-counting after a manual sync. Cash and position freshness still depends on SnapTrade's data plan.
+
+The strategy passes saved user secrets, uses whole-share limit orders, stops when an order is not fully filled, marks only confirmed fills as executed, and budgets purchases from synchronized cash after confirmed sales. Full asynchronous rebalance continuation and linking later fills back to signals/rebalance events remain unfinished; the refresh command updates trades and portfolio records, not those event records.
