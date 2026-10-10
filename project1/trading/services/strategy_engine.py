@@ -125,14 +125,17 @@ class MomentumTradingStrategy:
                     calculation_date=calculation_date
                 ).first()
 
-                sell_signal = TradingSignal.objects.create(
+                sell_signal, _ = TradingSignal.objects.get_or_create(
+                    portfolio=self.portfolio,
                     stock=stock,
                     signal_date=calculation_date,
                     signal_type="SELL",
-                    momentum_score=momentum_score,
-                    target_quantity=position.quantity,
-                    target_value=position.current_value,
-                    reason=f"Stock in bottom quintile (rank {momentum_score.rank if momentum_score else 'N/A'})",
+                    defaults={
+                        "momentum_score": momentum_score,
+                        "target_quantity": position.quantity,
+                        "target_value": position.current_value,
+                        "reason": f"Stock in bottom quintile (rank {momentum_score.rank if momentum_score else 'N/A'})",
+                    },
                 )
                 sell_signals.append(sell_signal)
 
@@ -155,13 +158,16 @@ class MomentumTradingStrategy:
                     calculation_date=calculation_date
                 ).first()
 
-                buy_signal = TradingSignal.objects.create(
+                buy_signal, _ = TradingSignal.objects.get_or_create(
+                    portfolio=self.portfolio,
                     stock=stock,
                     signal_date=calculation_date,
                     signal_type="BUY",
-                    momentum_score=momentum_score,
-                    target_value=allocation_per_stock,
-                    reason=f"Stock in top quintile (rank {momentum_score.rank if momentum_score else 'N/A'})",
+                    defaults={
+                        "momentum_score": momentum_score,
+                        "target_value": allocation_per_stock,
+                        "reason": f"Stock in top quintile (rank {momentum_score.rank if momentum_score else 'N/A'})",
+                    },
                 )
                 buy_signals.append(buy_signal)
 

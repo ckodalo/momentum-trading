@@ -107,6 +107,16 @@ The command reads the connected account's cash and positions, saves the USD bala
 
 ## Submit and track a paper order
 
+### Generate, review, and execute signals
+
+Open **Signals → Generate signals**, choose an active configured portfolio, and submit. This verifies Alpaca Paper, synchronizes cash and holdings, and generates BUY/SELL recommendations from the latest saved rankings. Rankings must be within the last seven days; refresh rankings first for current data. Only stocks with saved scores are considered. No orders are placed by generation. Buy budgets divide 95% of synced cash equally among eligible top-quintile stocks not already held; sell targets cover all held shares in bottom-quintile stocks.
+
+Signals now belong to a portfolio, and the list can be filtered by portfolio. Repeating generation for the same portfolio, stock, date, and direction reuses the original recommendation rather than duplicating or overwriting its budget. Legacy signals remain visible without an assigned portfolio and cannot use this execution flow.
+
+Click **Review and execute** on a recommendation. Review its reason, budget or sell quantity, current quote, and estimated order cost. The portfolio and direction are fixed. Choose a limit price and, for buys, a whole-share quantity within the saved budget, then explicitly submit the paper order. Each signal can have only one linked order, including ambiguous submissions; cancelled or rejected linked orders are not automatically retried. Inspect/reconcile them before making a separate manual decision. Status refresh marks the linked signal executed only after a fully filled order and a successful account sync. Partial fills, cancellations, and rejections remain unexecuted.
+
+Generation requires `trading.view_tradingsignal`, `trading.add_tradingsignal`, `trading.view_momentumscore`, `portfolio.view_portfolio`, and `portfolio.change_portfolio`. Signal execution also requires the existing paper trading permissions and `trading.view_tradingsignal`. Apply migrations before use. This is a review-and-submit workflow for individual signals; it does not start a rebalance, schedule jobs, or automatically execute a batch. The existing strategy rebalance entry point still attempts generation and trading in one run.
+
 From `/trading/rankings/`, click **Buy** or **Sell** beside a stock. Choose an active, configured portfolio, enter whole shares and a USD limit price, then click **Submit paper order**. The selected ticker comes from that ranking row. Before submission, the app verifies Alpaca Paper and synchronizes cash and holdings; insufficient cash, insufficient shares, and unresolved prior orders block submission. Manual orders can be placed for any ranked stock, independent of the strategy's quintile signals.
 
 The order detail page shows requested shares, limit price, status, filled shares, and average fill price. Click **Refresh order status** to check the brokerage and synchronize balances and holdings without submitting another order. Existing trade history statuses link to these pages. If an order has no brokerage ID, check Alpaca Paper before reconciling or retrying it.

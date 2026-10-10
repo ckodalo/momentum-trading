@@ -72,6 +72,8 @@ class MomentumScore(models.Model):
 
 
 class TradingSignal(models.Model):
+    portfolio = models.ForeignKey("portfolio.Portfolio", on_delete=models.CASCADE,
+        related_name="signals", null=True, blank=True)
     SIGNAL_TYPES = [
         ("BUY", "Buy"),
         ("SELL", "Sell"),
@@ -102,6 +104,8 @@ class TradingSignal(models.Model):
             models.Index(fields=["signal_date", "signal_type"]),
             models.Index(fields=["is_executed"]),
         ]
+        constraints = [models.UniqueConstraint(fields=["portfolio", "stock", "signal_date", "signal_type"],
+            name="unique_portfolio_stock_signal")]
 
 
 class RebalanceEvent(models.Model):

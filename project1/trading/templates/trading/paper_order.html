@@ -6,6 +6,14 @@
 <h1>Trade {{ score.stock.ticker }}</h1>
 <p class="muted">Alpaca Paper · Whole-share day limit order</p>
 <p>Momentum: {{ score.momentum_score|floatformat:4 }} · Quintile {{ score.quintile }} · Calculated {{ score.calculation_date|date:"Y-m-d" }}</p>
+{% if signal %}
+<section class="panel"><h2>Review signal {{ signal.pk }}</h2>
+<p>{{ signal.get_signal_type_display }} for {{ signal.portfolio.name }} · {{ signal.reason }}</p>
+{% if signal.signal_type == 'BUY' %}<p>Buy budget: ${{ signal.target_value|floatformat:2 }}. Choose a limit price and whole shares within this budget; the cost preview below updates as you type.</p>{% else %}<p>Target: sell {{ signal.target_quantity }} shares.</p>{% endif %}
+<p>Submitting creates one order for this recommendation. The signal is executed only after a confirmed full fill.</p>
+{% if signal_order %}<p>This signal already has an order: <a href="{% url 'trading:paper_trade' signal_order.pk %}">Order {{ signal_order.pk }} — {{ signal_order.get_status_display }}</a>. Refresh or reconcile that order.</p>{% endif %}
+</section>
+{% endif %}
 {% if pending_trade %}<p>An unresolved order exists: <a href="{% url 'trading:paper_trade' pending_trade.pk %}">View order {{ pending_trade.pk }}</a>. Check it before submitting again.</p>{% endif %}
 <section class="panel login">
 <form method="post" id="paper-order-form" data-quote-url="{% url 'trading:paper_order_quote' score.pk %}">
@@ -29,7 +37,7 @@
   <p id="order-budget-warning" class="error" role="status"></p>
   <p>A buy limit is the maximum price you pay per share. A sell limit is the minimum price you accept. An order may wait for a matching price or expire.</p>
   <p>Only connected Alpaca Paper accounts can trade here. Cash and holdings are checked before submission. Selling requires shares already held.</p>
-  <button type="submit" id="paper-order-button">Submit paper order</button>
+  <button type="submit" id="paper-order-button" {% if signal_order or signal.is_executed %}disabled{% endif %}>Submit paper order</button>
 </form>
 </section>
 <noscript><p>Enable JavaScript to load quotes and calculate the order total. Submission still checks your cash and holdings.</p></noscript>

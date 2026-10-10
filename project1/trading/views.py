@@ -10,6 +10,7 @@ from django.utils import timezone
 from io import StringIO
 
 from trading.models import MomentumScore, RebalanceEvent, TradingSignal
+from portfolio.models import Portfolio
 
 
 class RankingFilterForm(forms.Form):
@@ -18,6 +19,7 @@ class RankingFilterForm(forms.Form):
 
 
 class SignalFilterForm(forms.Form):
+    portfolio = forms.ModelChoiceField(queryset=Portfolio.objects.all(), required=False)
     date = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}))
     signal_type = forms.ChoiceField(required=False, choices=[("", "All signals")] + TradingSignal.SIGNAL_TYPES)
     executed = forms.ChoiceField(required=False, choices=[("", "Any execution status"), ("yes", "Executed"), ("no", "Unexecuted")])
@@ -97,13 +99,15 @@ class TradingSignalListView(FilteredListView):
     form_class = SignalFilterForm
 
     def filter_queryset(self, queryset, filters):
+        if filters.get("portfolio"):
+            queryset = queryset.filter(portfolio=filters["portfolio"])
         if filters["date"]:
             queryset = queryset.filter(signal_date=filters["date"])
         if filters["signal_type"]:
             queryset = queryset.filter(signal_type=filters["signal_type"])
         if filters["executed"]:
             queryset = queryset.filter(is_executed=filters["executed"] == "yes")
-        return queryset.select_related("stock").order_by("-signal_date", "-created_at", "-pk")
+        return queryset.select_related("stock", "portfolio").prefetch_related("orders").order_by("-signal_date", "-created_at", "-pk")
 
 
 class RebalanceEventListView(FilteredListView):

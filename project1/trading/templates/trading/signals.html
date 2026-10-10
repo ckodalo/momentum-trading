@@ -3,7 +3,19 @@
 {% block title %}Signals | Momentum Trader{% endblock %}
 {% block content %}
 <h1>Trading signals</h1><p class="muted">Saved signals across the strategy. Review their reasons and execution status.</p>
+{% for message in messages %}<p role="status">{{ message }}</p>{% endfor %}
+{% if perms.trading.add_tradingsignal and perms.portfolio.change_portfolio %}<p><a href="{% url 'trading:generate_signals' %}">Generate signals</a></p>{% endif %}
 <form method="get" class="filters">{{ filter_form.as_p }}<button type="submit">Apply filters</button> <a href="{% url 'trading:signals' %}">Reset</a></form>
-<section class="panel">{% if signals %}<div class="table-wrap"><table><thead><tr><th>Date</th><th>Stock</th><th>Signal</th><th class="number">Target shares</th><th class="number">Target value (USD)</th><th>Execution</th><th>Reason</th></tr></thead><tbody>{% for signal in signals %}<tr><td>{{ signal.signal_date|date:"Y-m-d" }}</td><td>{{ signal.stock.ticker }}</td><td>{{ signal.get_signal_type_display }}</td><td class="number">{{ signal.target_quantity|default_if_none:"—" }}</td><td class="number">{% if signal.target_value != None %}${{ signal.target_value|floatformat:2|intcomma }}{% else %}—{% endif %}</td><td>{% if signal.is_executed %}Executed{% if signal.executed_at %}<div class="muted">{{ signal.executed_at|date:"Y-m-d H:i" }} UTC</div>{% endif %}{% else %}Unexecuted{% endif %}</td><td>{{ signal.reason|default:"—" }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<div class="empty">No trading signals match this selection.</div>{% endif %}</section>
+<section class="panel">{% if signals %}<div class="table-wrap"><table>
+<thead><tr><th>Portfolio</th><th>Date</th><th>Stock</th><th>Signal</th><th class="number">Target shares</th><th class="number">Target value (USD)</th><th>Execution</th><th>Reason</th><th>Review / order</th></tr></thead>
+<tbody>{% for signal in signals %}<tr>
+<td>{{ signal.portfolio.name|default:"Legacy signal" }}</td>
+<td>{{ signal.signal_date|date:"Y-m-d" }}</td><td>{{ signal.stock.ticker }}</td><td>{{ signal.get_signal_type_display }}</td>
+<td class="number">{{ signal.target_quantity|default_if_none:"—" }}</td>
+<td class="number">{% if signal.target_value != None %}${{ signal.target_value|floatformat:2|intcomma }}{% else %}—{% endif %}</td>
+<td>{% if signal.is_executed %}Executed{% if signal.executed_at %}<div class="muted">{{ signal.executed_at|date:"Y-m-d H:i" }} UTC</div>{% endif %}{% else %}Unexecuted{% endif %}</td>
+<td>{{ signal.reason|default:"—" }}</td>
+<td>{% for order in signal.orders.all %}<a href="{% url 'trading:paper_trade' order.pk %}">Order {{ order.pk }} — {{ order.get_status_display }}</a>{% empty %}{% if signal.portfolio_id and signal.momentum_score_id and not signal.is_executed and perms.portfolio.execute_paper_trade %}<a href="{% url 'trading:execute_signal' signal.pk %}">Review and execute</a>{% else %}—{% endif %}{% endfor %}</td>
+</tr>{% endfor %}</tbody></table></div>{% else %}<div class="empty">No trading signals match this selection.</div>{% endif %}</section>
 {% if is_paginated %}<nav class="pagination" aria-label="Pages"><span>{% if page_obj.has_previous %}<a href="?{{ filter_query }}&page={{ page_obj.previous_page_number }}">Previous</a>{% endif %}</span><span>Page {{ page_obj.number }} of {{ paginator.num_pages }}</span><span>{% if page_obj.has_next %}<a href="?{{ filter_query }}&page={{ page_obj.next_page_number }}">Next</a>{% endif %}</span></nav>{% endif %}
 {% endblock %}

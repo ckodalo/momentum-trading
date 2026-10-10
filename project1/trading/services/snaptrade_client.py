@@ -183,7 +183,7 @@ class TradingExecutor:
         message = " ".join(message.split())[:500]
         return details + (f": {message}" if message else "")
 
-    def submit_paper_order(self, portfolio, stock, action, units, limit_price, user_secret=None):
+    def submit_paper_order(self, portfolio, stock, action, units, limit_price, user_secret=None, signal=None):
         units = Decimal(str(units))
         limit_price = Decimal(str(limit_price))
         if action not in ("BUY", "SELL") or not units.is_finite() or units <= 0 or units != units.to_integral_value():
@@ -195,6 +195,18 @@ class TradingExecutor:
         quote = self._quote(portfolio, stock, user_secret)
         with transaction.atomic():
             locked = Portfolio.objects.select_for_update().get(pk=portfolio.pk)
+            if signal is not None:
+                from trading.models import TradingSignal
+                signal = TradingSignal.objects.select_for_update().get(pk=signal.pk)
+                if (signal.portfolio_id != locked.pk or signal.stock_id != stock.pk
+                        or signal.signal_type != action or signal.is_executed):
+                    raise ValueError("The signal does not match this order or was already executed")
+                if signal.orders.exists():
+                    raise ValueError("This signal already has an order. Refresh or reconcile that order first")
+                if action == "BUY" and (signal.target_value is None or units * limit_price > signal.target_value):
+                    raise ValueError("The order exceeds the signal's buy budget")
+                if action == "SELL" and units != signal.target_quantity:
+                    raise ValueError("The sell order must match the signal's target shares")
             # Ambiguous submissions remain PENDING until manually reconciled.
             if locked.trades.filter(status__in=["PENDING", "SUBMITTED", "PARTIALLY_FILLED"]).exists():
                 raise ValueError("Refresh or reconcile the outstanding portfolio order before submitting another")
@@ -204,7 +216,7 @@ class TradingExecutor:
                 position = locked.positions.filter(stock=stock).first()
                 if not position or position.quantity < units:
                     raise ValueError("Insufficient synced shares for the sell order")
-            trade = Trade.objects.create(portfolio=locked, stock=stock, trade_type=action,
+            trade = Trade.objects.create(portfolio=locked, stock=stock, trade_type=action, signal=signal,
                 quantity=int(units), price=limit_price, order_value=units * limit_price)
         try:
             result = self.snaptrade.trading.place_force_order(
@@ -303,6 +315,10 @@ class TradingExecutor:
             if status == "FILLED" and not locked.filled_at:
                 locked.filled_at = timezone.now()
             locked.save()
+            if locked.signal_id and status == "FILLED":
+                from trading.models import TradingSignal
+                TradingSignal.objects.filter(pk=locked.signal_id, portfolio_id=locked.portfolio_id).update(
+                    is_executed=True, executed_at=locked.filled_at)
         trade.refresh_from_db()
         trade.portfolio.refresh_from_db()
         return True

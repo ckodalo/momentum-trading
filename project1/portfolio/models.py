@@ -102,6 +102,8 @@ class Position(models.Model):
 
 
 class Trade(models.Model):
+    signal = models.ForeignKey("trading.TradingSignal", on_delete=models.SET_NULL,
+        related_name="orders", null=True, blank=True)
     TRADE_TYPES = [
         ("BUY", "Buy"),
         ("SELL", "Sell"),
@@ -141,6 +143,7 @@ class Trade(models.Model):
 
     class Meta:
         db_table = "trades"
+        constraints = [models.UniqueConstraint(fields=["signal"], name="unique_order_per_signal")]
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["portfolio", "status"]),

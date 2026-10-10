@@ -7,6 +7,7 @@
 <section class="panel">
 <p>Portfolio: <a href="{% url 'portfolio:detail' trade.portfolio_id %}">{{ trade.portfolio.name }}</a></p>
 <p>Status: <strong>{{ trade.get_status_display }}</strong></p>
+{% if trade.signal_id %}<p>Linked recommendation: <a href="{% url 'trading:signals' %}?portfolio={{ trade.portfolio_id }}">Signal {{ trade.signal_id }}</a>. It is marked executed only after a full fill.</p>{% endif %}
 <p>Requested: {{ trade.quantity }} shares · Limit: ${{ trade.price|floatformat:2 }} per share</p>
 <p>Filled: {{ trade.filled_quantity }} shares{% if trade.filled_price != None %} · Average fill price: ${{ trade.filled_price|floatformat:4 }}{% endif %}</p>
 {% if trade.error_message %}<p class="error">{{ trade.error_message }}</p>{% endif %}

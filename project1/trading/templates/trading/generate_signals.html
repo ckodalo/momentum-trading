@@ -1,0 +1,8 @@
+{% extends "portfolio/base.html" %}
+{% block title %}Generate signals | Momentum Trader{% endblock %}
+{% block content %}
+<h1>Generate signals</h1>
+<p>Choose a portfolio. This reads its Alpaca Paper cash and holdings and compares them with the latest saved momentum rankings. It saves recommendations without submitting orders.</p>
+<p>Buy budgets divide 95% of available cash equally among eligible top-quintile stocks. Sell recommendations cover holdings in the bottom quintile. Only stocks with saved rankings are considered; refresh rankings first for current coverage.</p>
+<form method="post" class="panel">{% csrf_token %}{{ form.as_p }}<button type="submit">Generate signals</button> <a href="{% url 'trading:signals' %}">Back to signals</a></form>
+{% endblock %}
