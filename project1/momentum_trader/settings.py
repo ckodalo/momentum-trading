@@ -125,7 +125,7 @@ STATIC_URL = "static/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-LOGIN_REDIRECT_URL = "portfolio:list"
+LOGIN_REDIRECT_URL = "trading:rankings"
 
 MASSIVE_API_KEY = config("MASSIVE_API_KEY", default="")
 SNAPTRADE_CLIENT_SECRET = config("SNAPTRADE_CLIENT_SECRET", default="")

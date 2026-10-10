@@ -7,6 +7,9 @@ from django.core.management import call_command
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils import timezone
+from django.db.models import Count
+from django.views.decorators.clickjacking import xframe_options_sameorigin
+from django.utils.decorators import method_decorator
 from io import StringIO
 
 from trading.models import MomentumScore, RebalanceEvent, TradingSignal
@@ -29,6 +32,7 @@ class RebalanceFilterForm(forms.Form):
     status = forms.ChoiceField(required=False, choices=[("", "All statuses")] + list(RebalanceEvent._meta.get_field("execution_status").choices))
 
 
+@method_decorator(xframe_options_sameorigin, name="dispatch")
 class FilteredListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     paginate_by = 20
 
@@ -49,6 +53,7 @@ class FilteredListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
 
 
 class MomentumRankingView(FilteredListView):
+    paginate_by = 100
     model = MomentumScore
     permission_required = "trading.view_momentumscore"
     template_name = "trading/rankings.html"
@@ -65,6 +70,30 @@ class MomentumRankingView(FilteredListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["calculation_date"] = getattr(self, "calculation_date", None)
+        context["ranked_count"] = MomentumScore.objects.filter(calculation_date=context["calculation_date"]).count()
+        context["quintile_counts"] = MomentumScore.objects.filter(calculation_date=context["calculation_date"]).values("quintile").annotate(total=Count("pk")).order_by("quintile")
+        user = self.request.user
+        if user.has_perm("portfolio.view_portfolio"):
+            portfolios = Portfolio.objects.filter(is_active=True)
+            context["workspace_portfolios"] = portfolios
+            selected_id = self.request.GET.get("portfolio")
+            selected = None
+            if "portfolio" in self.request.GET:
+                try:
+                    selected = portfolios.filter(pk=int(selected_id)).first()
+                except (ValueError, TypeError):
+                    pass
+            else:
+                selected = portfolios.first()
+            context["selected_portfolio"] = selected
+            if selected:
+                if user.has_perm("trading.view_tradingsignal"):
+                    context["workspace_signals"] = selected.signals.select_related("stock").prefetch_related("orders").order_by("-signal_date", "-pk")[:20]
+                if user.has_perm("portfolio.view_trade"):
+                    context["workspace_orders"] = selected.trades.select_related("stock").all()[:20]
+                    context["outstanding_count"] = selected.trades.filter(status__in=["PENDING", "SUBMITTED", "PARTIALLY_FILLED"]).count()
+                if user.has_perm("portfolio.view_position"):
+                    context["workspace_positions"] = selected.get_current_positions()
         return context
 
 
@@ -88,7 +117,15 @@ class RefreshMomentumRankingsView(LoginRequiredMixin, PermissionRequiredMixin, V
         messages.success(request, f"Rankings refreshed for {calculation_date} using the 50-stock universe.")
         if errors.getvalue():
             messages.warning(request, "Some stocks were skipped because price history was unavailable. Previously saved scores for skipped stocks remain unchanged.")
-        return redirect(f"{reverse('trading:rankings')}?date={calculation_date}")
+        destination = f"{reverse('trading:rankings')}?date={calculation_date}"
+        if request.user.has_perm("portfolio.view_portfolio"):
+            try:
+                selected = Portfolio.objects.filter(pk=int(request.POST.get("portfolio", "")), is_active=True).first()
+                if selected:
+                    destination += f"&portfolio={selected.pk}"
+            except (ValueError, TypeError):
+                pass
+        return redirect(destination)
 
 
 class TradingSignalListView(FilteredListView):

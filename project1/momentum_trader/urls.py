@@ -20,7 +20,7 @@ from django.urls import include, path
 from django.views.generic import RedirectView
 
 urlpatterns = [
-    path('', RedirectView.as_view(pattern_name='portfolio:list', permanent=False)),
+    path('', RedirectView.as_view(pattern_name='trading:rankings', permanent=False)),
     path('trading/', include('trading.urls')),
     path('portfolios/', include('portfolio.urls')),
     path('accounts/login/', LoginView.as_view(template_name='portfolio/login.html'), name='login'),

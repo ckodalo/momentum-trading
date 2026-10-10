@@ -8,6 +8,8 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils import timezone
 from django.views.generic import FormView
+from django.utils.decorators import method_decorator
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 
 from trading.models import MomentumScore, TradingSignal
 from trading.trade_views import PaperOrderForm, PaperOrderView
@@ -19,11 +21,24 @@ class GenerateSignalsForm(forms.Form):
     portfolio = forms.ModelChoiceField(queryset=PaperOrderForm().fields["portfolio"].queryset)
 
 
+@method_decorator(xframe_options_sameorigin, name="dispatch")
 class GenerateSignalsView(LoginRequiredMixin, PermissionRequiredMixin, FormView):
     permission_required = ("trading.view_tradingsignal", "trading.add_tradingsignal",
         "trading.view_momentumscore", "portfolio.view_portfolio", "portfolio.change_portfolio")
     template_name = "trading/generate_signals.html"
     form_class = GenerateSignalsForm
+
+    def get_initial(self):
+        initial = super().get_initial()
+        selected_id = self.request.GET.get("portfolio")
+        if selected_id:
+            try:
+                selected = GenerateSignalsForm().fields["portfolio"].queryset.filter(pk=int(selected_id)).first()
+                if selected:
+                    initial["portfolio"] = selected
+            except (ValueError, TypeError):
+                pass
+        return initial
 
     def form_valid(self, form):
         portfolio = form.cleaned_data["portfolio"]

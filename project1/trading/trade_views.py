@@ -8,6 +8,7 @@ from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.cache import never_cache
 from django.utils.decorators import method_decorator
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.views import View
 from django.views.generic import DetailView, FormView
 
@@ -36,6 +37,7 @@ class PaperOrderForm(forms.Form):
         return cleaned
 
 
+@method_decorator(xframe_options_sameorigin, name="dispatch")
 class PaperOrderView(LoginRequiredMixin, PermissionRequiredMixin, FormView):
     permission_required = ("trading.view_momentumscore", "portfolio.view_portfolio",
                            "portfolio.view_trade", "portfolio.execute_paper_trade")
@@ -51,6 +53,15 @@ class PaperOrderView(LoginRequiredMixin, PermissionRequiredMixin, FormView):
         initial = super().get_initial()
         initial["action"] = "SELL" if self.request.GET.get("action") == "SELL" else "BUY"
         portfolios = list(PaperOrderForm().fields["portfolio"].queryset[:2])
+        selected_id = self.request.GET.get("portfolio")
+        if selected_id:
+            try:
+                selected = PaperOrderForm().fields["portfolio"].queryset.filter(pk=int(selected_id)).first()
+                if selected:
+                    initial["portfolio"] = selected
+                    return initial
+            except (ValueError, TypeError):
+                pass
         if len(portfolios) == 1:
             initial["portfolio"] = portfolios[0]
         return initial
@@ -89,6 +100,7 @@ class PaperOrderView(LoginRequiredMixin, PermissionRequiredMixin, FormView):
         return redirect("trading:paper_trade", pk=trade.pk)
 
 
+@method_decorator(xframe_options_sameorigin, name="dispatch")
 class PaperTradeDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
     permission_required = ("portfolio.view_portfolio", "portfolio.view_trade")
     model = Trade

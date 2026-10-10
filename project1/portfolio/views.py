@@ -1,9 +1,12 @@
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.views.generic import DetailView, ListView
+from django.views.decorators.clickjacking import xframe_options_sameorigin
+from django.utils.decorators import method_decorator
 
 from portfolio.models import Portfolio
 
 
+@method_decorator(xframe_options_sameorigin, name="dispatch")
 class PortfolioListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     model = Portfolio
     template_name = "portfolio/portfolio_list.html"
@@ -12,6 +15,7 @@ class PortfolioListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     paginate_by = 20
 
 
+@method_decorator(xframe_options_sameorigin, name="dispatch")
 class PortfolioDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
     model = Portfolio
     template_name = "portfolio/portfolio_detail.html"

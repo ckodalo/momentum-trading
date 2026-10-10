@@ -29,7 +29,7 @@ class RefreshRankingsTests(TestCase):
         self.assertEqual(self.client.post(self.url).status_code, 302)
         self.grant_permissions()
         self.assertEqual(self.client.post(self.url).status_code, 403)
-        self.assertNotContains(self.client.get(reverse("trading:rankings")), "Refresh rankings")
+        self.assertNotContains(self.client.get(reverse("trading:rankings")), 'id="refresh-rankings-button"')
         command.assert_not_called()
 
     @patch("trading.views.call_command")

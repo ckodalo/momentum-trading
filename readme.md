@@ -57,6 +57,12 @@ Open http://127.0.0.1:8000/ and sign in. SQLite is configured locally. API crede
 
 ## Application pages
 
+The home URL `/` and default post-login destination now open the rankings workspace. It uses compact typography, a scrollable ranking table (up to 100 scores per page, covering the default 50-stock universe), quintile coverage, and a selected-portfolio summary. The activity column shows that portfolio's latest 20 signals and orders, outstanding-order reminders, and saved holdings. Each section still requires its existing model permissions. Workspace reads use saved records and do not fetch brokerage data or submit orders.
+
+Select a portfolio in the workspace, then generate signals, review/execute a recommendation, manually buy/sell a ranked stock, or open an order to refresh its status. These actions open dialogs containing the existing authorized forms. Cash/holdings checks, explicit submission, CSRF protection, budget checks, and duplicate-order guards remain in the backend. Dialogs cannot be closed while a POST is processing; closing after an action reloads the workspace while preserving its URL filters and portfolio selection. The shared pages allow same-origin framing only. Without JavaScript or dialog support, action links still open their normal pages.
+
+Portfolios, Signals, and Rebalances are compact secondary navigation items that open dialogs from the workspace. Admin remains a separate page. Portfolio selection carries into the trade and generation forms and is retained after a successful rankings refresh. Summary values and order statuses are labeled as saved snapshots; live quotes load in the trade dialog. New static assets are `trading/workspace.css` and `trading/workspace.js`; restart the local development server and hard-refresh if cached assets prevent the new layout from loading.
+
 - `/portfolios/`: portfolio overview; click a name for holdings, the latest 50 trades, and the latest 30 performance snapshots.
 - `/trading/rankings/`: latest saved momentum rankings, with calculation date and quintile filters. Momentum is displayed as a decimal return (0.25 means 25%). **Refresh rankings** fetches historical prices for the fixed 50-stock universe, recalculates today's momentum scores, saves them, and opens today's rankings with filters cleared. It may take a minute depending on API access and rate limits. The page reports success, skipped stocks, or failure. **Reset** only clears filters. Refresh submits no orders.
 - `/trading/signals/`: saved signals, filterable by date, signal type, and execution status.

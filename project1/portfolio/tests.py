@@ -44,12 +44,13 @@ class PortfolioListTests(TestCase):
         self.assertContains(response, "&lt;script&gt;")
         self.assertNotContains(response, "<script>")
 
-    def test_login_returns_to_portfolios(self):
+    def test_login_returns_to_rankings(self):
         self.grant_access()
+        self.user.user_permissions.add(Permission.objects.get(content_type__app_label="trading", codename="view_momentumscore"))
         self.client.logout()
         self.assertRedirects(
             self.client.post(reverse("login"), {"username": "viewer", "password": "test-password"}),
-            self.url,
+            reverse("trading:rankings"),
         )
 
     def test_pagination(self):
