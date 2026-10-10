@@ -35,7 +35,7 @@ The Django project lives in `project1/`.
 
 ## Current state
 
-The application includes a portfolio list and detail page, momentum rankings, trading signals, and rebalance history. These pages display saved database records; they do not fetch market data or submit orders. The trading workflow remains an unfinished prototype: backtesting, full automation, and parts of execution and reconciliation still need further work.
+The application includes a portfolio list and detail page, momentum rankings, trading signals, and rebalance history. Normal page reads display saved database records. The rankings page has explicit actions to refresh market data and submit manual buy/sell orders to a verified Alpaca Paper account. Backtesting, full automation, and asynchronous rebalance continuation still need further work.
 
 Weekly and monthly rebalancing are interval checks in the strategy code; a recurring job scheduler is not yet provided. The backtest method is a placeholder. View tests cover permissions, portfolio data isolation, filtering, pagination, and rendering.
 
@@ -58,7 +58,7 @@ Open http://127.0.0.1:8000/ and sign in. SQLite is configured locally. API crede
 ## Application pages
 
 - `/portfolios/`: portfolio overview; click a name for holdings, the latest 50 trades, and the latest 30 performance snapshots.
-- `/trading/rankings/`: latest saved momentum rankings, with calculation date and quintile filters. Momentum is displayed as a decimal return (0.25 means 25%).
+- `/trading/rankings/`: latest saved momentum rankings, with calculation date and quintile filters. Momentum is displayed as a decimal return (0.25 means 25%). **Refresh rankings** fetches historical prices for the fixed 50-stock universe, recalculates today's momentum scores, saves them, and opens today's rankings with filters cleared. It may take a minute depending on API access and rate limits. The page reports success, skipped stocks, or failure. **Reset** only clears filters. Refresh submits no orders.
 - `/trading/signals/`: saved signals, filterable by date, signal type, and execution status.
 - `/trading/rebalances/`: saved rebalance runs, filterable by status.
 - `/admin/`: manage database records and user permissions.
@@ -74,6 +74,8 @@ Run checks and tests from `project1`:
 
 ## Fetch momentum rankings
 
+You can also refresh from `/trading/rankings/` using **Refresh rankings**. A superuser can use the button; other users need `view_momentumscore`, `add_momentumscore`, `change_momentumscore`, and `add_stock` permissions. The action uses a CSRF-protected POST request and the same command described below. It runs during the request rather than as a background job. Ordinary page views and filtering still read saved scores only.
+
 From `project1`, set `MASSIVE_API_KEY` in `.env` and run:
 
 ```powershell
@@ -81,9 +83,9 @@ From `project1`, set `MASSIVE_API_KEY` in `.env` and run:
 .\.venv\Scripts\python.exe manage.py pull_massive_data
 ```
 
-The command creates AAPL and NVDA stock records, fetches historical momentum prices, saves scores, and assigns ranks and quintiles for today's date. Refresh `/trading/rankings/` afterward. Repeating the command updates scores for the same stock and calculation date. It does not create holdings, signals, rebalance events, or brokerage orders.
+By default, the command uses the same fixed 50-stock universe as the strategy, defined in `MassiveAPIClient.get_sp500_tickers()`. This is a demonstration list, not a live list of all S&P 500 constituents. It creates stock records, fetches historical momentum prices, saves scores, and assigns ranks and quintiles for today's date. Refresh `/trading/rankings/` afterward. Repeating the command updates scores for the same stock and calculation date. It does not create holdings, signals, rebalance events, or brokerage orders. Stocks without sufficient available data are skipped, so fewer than 50 scores may be saved.
 
-Choose other symbols or a historical calculation date with:
+Override the default universe with `--tickers`, or choose a historical calculation date with `--date`:
 
 ```powershell
 .\.venv\Scripts\python.exe manage.py pull_massive_data --tickers AAPL NVDA MSFT --date 2026-10-04
@@ -104,6 +106,16 @@ From `project1`, replace `1` with the portfolio ID shown in its admin edit URL:
 The command reads the connected account's cash and positions, saves the USD balance and holdings, clears holdings no longer present, and recalculates total value. Refresh the portfolio detail page afterward. It submits no orders and leaves initial cash and trade history unchanged. Both responses are validated before any database changes. The current integer quantity model supports long, whole-share holdings only; fractional or short holdings stop the sync with an error. Missing prices or purchase costs and non-USD holdings also stop the sync. SnapTrade data freshness depends on the account's data-access plan; this command does not request a paid brokerage refresh. Order execution remains unfinished.
 
 ## Submit and track a paper order
+
+From `/trading/rankings/`, click **Buy** or **Sell** beside a stock. Choose an active, configured portfolio, enter whole shares and a USD limit price, then click **Submit paper order**. The selected ticker comes from that ranking row. Before submission, the app verifies Alpaca Paper and synchronizes cash and holdings; insufficient cash, insufficient shares, and unresolved prior orders block submission. Manual orders can be placed for any ranked stock, independent of the strategy's quintile signals.
+
+The order detail page shows requested shares, limit price, status, filled shares, and average fill price. Click **Refresh order status** to check the brokerage and synchronize balances and holdings without submitting another order. Existing trade history statuses link to these pages. If an order has no brokerage ID, check Alpaca Paper before reconciling or retrying it.
+
+The trade form loads bid, ask, last-traded price, available USD cash, and shares held from the selected Alpaca Paper account through SnapTrade. Changing portfolios or clicking **Refresh prices** reloads this preview without changing the database or placing orders. Quotes may be delayed; the displayed retrieval time is the app's fetch time, not a market quote timestamp (the quote endpoint supplies none). Missing prices or balances display as unavailable. **Use ask as buy limit** / **Use bid as sell limit** copies a price only when clicked; fetching a quote never overwrites an entered limit.
+
+As quantity or limit price changes, the form shows maximum share cost for buys or minimum share proceeds if fully filled for sells, excluding fees. It flags costs exceeding the displayed cash or sale quantities exceeding the displayed holdings. These are previews; submission still rechecks the account, cash, and holdings. Prices are loaded on selection and explicit refresh, without background polling.
+
+Superusers can trade. Other users need `trading.view_momentumscore`, `portfolio.view_portfolio`, `portfolio.view_trade`, and the new `portfolio.execute_paper_trade` permission (**Can submit and refresh paper trades**). Apply migrations to create the permission. Permissions still apply across portfolios because the models have no user ownership field. The trade form loads a read-only quote and account preview for the selected portfolio; opening an order detail page reads saved records only. Submission and order-status refresh require CSRF-protected POST requests.
 
 Paper execution uses the saved Commercial SnapTrade credentials and requires account metadata to identify the connected institution as Alpaca Paper. Orders use positive whole-share quantities and day limit prices. The one-order test command allows one share and a limit of at most USD 500. Choose a limit price based on the current Alpaca Paper quote; an order may remain open if that limit cannot be met. From `project1`:
 

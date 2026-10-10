@@ -11,21 +11,22 @@ class Command(BaseCommand):
     help = "Fetch historical prices, save momentum scores, and rank stocks."
 
     def add_arguments(self, parser):
-        parser.add_argument("--tickers", nargs="+", default=["AAPL", "NVDA"], help="Stock symbols separated by spaces (default: AAPL NVDA).")
+        parser.add_argument("--tickers", nargs="+", default=None, help="Stock symbols separated by spaces (default: the strategy's fixed 50-stock universe).")
         parser.add_argument("--date", type=date.fromisoformat, default=None, help="Calculation date in YYYY-MM-DD format (default: today).")
 
     def handle(self, *args, **options):
         calculation_date = options["date"] or timezone.localdate()
         if calculation_date > timezone.localdate():
             raise CommandError("Calculation date cannot be in the future.")
-        tickers = list(dict.fromkeys(ticker.strip().upper() for ticker in options["tickers"]))
-        if any(not re.fullmatch(r"[A-Z0-9][A-Z0-9.-]{0,9}", ticker) for ticker in tickers):
+        tickers = list(dict.fromkeys(ticker.strip().upper() for ticker in options["tickers"])) if options["tickers"] is not None else None
+        if tickers is not None and any(not re.fullmatch(r"[A-Z0-9][A-Z0-9.-]{0,9}", ticker) for ticker in tickers):
             raise CommandError("Invalid ticker: use stock symbols of at most 10 letters, digits, dots, or hyphens.")
         try:
             calculator = MomentumCalculator()
         except ValueError as exc:
             raise CommandError(str(exc)) from exc
         stocks = calculator.update_stock_universe(tickers)
+        tickers = [stock.ticker for stock in stocks]
         self.stdout.write(f"Fetching historical momentum data for {', '.join(tickers)} as of {calculation_date}...")
         scores = calculator.calculate_momentum_scores_bulk(stocks, calculation_date)
         saved_tickers = {score.stock.ticker for score in scores}

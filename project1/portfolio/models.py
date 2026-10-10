@@ -18,6 +18,7 @@ class Portfolio(models.Model):
     class Meta:
         db_table = "portfolios"
         ordering = ["name"]
+        permissions = [("execute_paper_trade", "Can submit and refresh paper trades")]
 
     def __str__(self):
         return f"{self.name} - ${self.total_value:,.2f}"

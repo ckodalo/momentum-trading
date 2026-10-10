@@ -1,6 +1,13 @@
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django import forms
 from django.views.generic import ListView
+from django.views import View
+from django.contrib import messages
+from django.core.management import call_command
+from django.shortcuts import redirect
+from django.urls import reverse
+from django.utils import timezone
+from io import StringIO
 
 from trading.models import MomentumScore, RebalanceEvent, TradingSignal
 
@@ -57,6 +64,29 @@ class MomentumRankingView(FilteredListView):
         context = super().get_context_data(**kwargs)
         context["calculation_date"] = getattr(self, "calculation_date", None)
         return context
+
+
+class RefreshMomentumRankingsView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = (
+        "trading.view_momentumscore", "trading.add_momentumscore",
+        "trading.change_momentumscore", "trading.add_stock",
+    )
+    http_method_names = ["post"]
+
+    def post(self, request, *args, **kwargs):
+        calculation_date = timezone.localdate()
+        output, errors = StringIO(), StringIO()
+        try:
+            call_command("pull_massive_data", date=calculation_date,
+                         stdout=output, stderr=errors, no_color=True)
+        except Exception:
+            # API exceptions may include credentials or signed URLs.
+            messages.error(request, "Could not refresh rankings. Check your Massive API key, plan access, network connection, and available price history. Saved rankings are still available.")
+            return redirect("trading:rankings")
+        messages.success(request, f"Rankings refreshed for {calculation_date} using the 50-stock universe.")
+        if errors.getvalue():
+            messages.warning(request, "Some stocks were skipped because price history was unavailable. Previously saved scores for skipped stocks remain unchanged.")
+        return redirect(f"{reverse('trading:rankings')}?date={calculation_date}")
 
 
 class TradingSignalListView(FilteredListView):

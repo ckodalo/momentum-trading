@@ -3,7 +3,23 @@
 {% block title %}Rankings | Momentum Trader{% endblock %}
 {% block content %}
 <h1>Momentum rankings</h1><p class="muted">Latest saved rankings by default. {% if calculation_date %}Calculation date: {{ calculation_date|date:"Y-m-d" }}.{% endif %} Momentum is shown as a decimal return: 0.25 means 25%.</p>
+{% for message in messages %}<p role="status"{% if message.tags == "error" %} class="error"{% endif %}>{{ message }}</p>{% endfor %}
+{% if perms.trading.add_momentumscore and perms.trading.change_momentumscore and perms.trading.add_stock %}
+<form method="post" action="{% url 'trading:refresh_rankings' %}" id="refresh-rankings-form">
+  {% csrf_token %}
+  <button type="submit" id="refresh-rankings-button">Refresh rankings</button>
+  <p class="muted">Fetch historical prices for the 50-stock universe and calculate today's rankings. This may take a minute. No trades are placed.</p>
+</form>
+<script>
+  document.getElementById('refresh-rankings-form').addEventListener('submit', function () {
+    const button = document.getElementById('refresh-rankings-button');
+    button.disabled = true;
+    button.textContent = 'Refreshing rankings…';
+    this.setAttribute('aria-busy', 'true');
+  });
+</script>
+{% endif %}
 <form method="get" class="filters">{{ filter_form.as_p }}<button type="submit">Apply filters</button> <a href="{% url 'trading:rankings' %}">Reset</a></form>
-<section class="panel">{% if scores %}<div class="table-wrap"><table><thead><tr><th>Rank</th><th>Stock</th><th class="number">Momentum</th><th>Quintile</th><th>Price window</th></tr></thead><tbody>{% for score in scores %}<tr><td>{{ score.rank|default_if_none:"—" }}</td><td><strong>{{ score.stock.ticker }}</strong><div class="muted">{{ score.stock.name }}</div></td><td class="number">{{ score.momentum_score|floatformat:4 }}</td><td>{{ score.quintile|default_if_none:"—" }}{% if score.is_top_quintile %} <span class="badge">Top</span>{% endif %}</td><td>{{ score.period_start|date:"Y-m-d" }} to {{ score.period_end|date:"Y-m-d" }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<div class="empty">No momentum scores match this selection.</div>{% endif %}</section>
+<section class="panel">{% if scores %}<div class="table-wrap"><table><thead><tr><th>Rank</th><th>Stock</th><th class="number">Momentum</th><th>Quintile</th><th>Price window</th>{% if perms.portfolio.execute_paper_trade and perms.portfolio.view_portfolio and perms.portfolio.view_trade %}<th>Paper trade</th>{% endif %}</tr></thead><tbody>{% for score in scores %}<tr><td>{{ score.rank|default_if_none:"—" }}</td><td><strong>{{ score.stock.ticker }}</strong><div class="muted">{{ score.stock.name }}</div></td><td class="number">{{ score.momentum_score|floatformat:4 }}</td><td>{{ score.quintile|default_if_none:"—" }}{% if score.is_top_quintile %} <span class="badge">Top</span>{% endif %}</td><td>{{ score.period_start|date:"Y-m-d" }} to {{ score.period_end|date:"Y-m-d" }}</td>{% if perms.portfolio.execute_paper_trade and perms.portfolio.view_portfolio and perms.portfolio.view_trade %}<td><a class="button" href="{% url 'trading:paper_order' score.pk %}?action=BUY">Buy</a> <a href="{% url 'trading:paper_order' score.pk %}?action=SELL">Sell</a></td>{% endif %}</tr>{% endfor %}</tbody></table></div>{% else %}<div class="empty">No momentum scores match this selection.</div>{% endif %}</section>
 {% if is_paginated %}<nav class="pagination" aria-label="Pages"><span>{% if page_obj.has_previous %}<a href="?{{ filter_query }}&page={{ page_obj.previous_page_number }}">Previous</a>{% endif %}</span><span>Page {{ page_obj.number }} of {{ paginator.num_pages }}</span><span>{% if page_obj.has_next %}<a href="?{{ filter_query }}&page={{ page_obj.next_page_number }}">Next</a>{% endif %}</span></nav>{% endif %}
 {% endblock %}

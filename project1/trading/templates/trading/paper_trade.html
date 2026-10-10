@@ -1,0 +1,18 @@
+{% extends "portfolio/base.html" %}
+{% block title %}Order {{ trade.pk }} | Momentum Trader{% endblock %}
+{% block content %}
+<a href="{% url 'trading:rankings' %}">Back to rankings</a>
+<h1>{{ trade.get_trade_type_display }} {{ trade.stock.ticker }} · Order {{ trade.pk }}</h1>
+{% for message in messages %}<p role="status"{% if message.tags == "error" %} class="error"{% endif %}>{{ message }}</p>{% endfor %}
+<section class="panel">
+<p>Portfolio: <a href="{% url 'portfolio:detail' trade.portfolio_id %}">{{ trade.portfolio.name }}</a></p>
+<p>Status: <strong>{{ trade.get_status_display }}</strong></p>
+<p>Requested: {{ trade.quantity }} shares · Limit: ${{ trade.price|floatformat:2 }} per share</p>
+<p>Filled: {{ trade.filled_quantity }} shares{% if trade.filled_price != None %} · Average fill price: ${{ trade.filled_price|floatformat:4 }}{% endif %}</p>
+{% if trade.error_message %}<p class="error">{{ trade.error_message }}</p>{% endif %}
+{% if perms.portfolio.execute_paper_trade %}
+<form method="post" action="{% url 'trading:refresh_paper_trade' trade.pk %}">{% csrf_token %}<button type="submit">Refresh order status</button></form>
+{% endif %}
+<p class="muted">Refreshing checks the brokerage status and updates portfolio cash and holdings. It does not submit another order. Orders are not checked automatically.</p>
+</section>
+{% endblock %}

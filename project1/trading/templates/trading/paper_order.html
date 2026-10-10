@@ -1,0 +1,37 @@
+{% extends "portfolio/base.html" %}
+{% load static %}
+{% block title %}Trade {{ score.stock.ticker }} | Momentum Trader{% endblock %}
+{% block content %}
+<a href="{% url 'trading:rankings' %}?date={{ score.calculation_date|date:'Y-m-d' }}">Back to rankings</a>
+<h1>Trade {{ score.stock.ticker }}</h1>
+<p class="muted">Alpaca Paper · Whole-share day limit order</p>
+<p>Momentum: {{ score.momentum_score|floatformat:4 }} · Quintile {{ score.quintile }} · Calculated {{ score.calculation_date|date:"Y-m-d" }}</p>
+{% if pending_trade %}<p>An unresolved order exists: <a href="{% url 'trading:paper_trade' pending_trade.pk %}">View order {{ pending_trade.pk }}</a>. Check it before submitting again.</p>{% endif %}
+<section class="panel login">
+<form method="post" id="paper-order-form" data-quote-url="{% url 'trading:paper_order_quote' score.pk %}">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <section aria-label="Stock prices and account balance">
+    <h2>Latest quote (USD)</h2>
+    <div class="summary">
+      <div>Ask<br><strong id="quote-ask">—</strong></div>
+      <div>Bid<br><strong id="quote-bid">—</strong></div>
+      <div>Last trade<br><strong id="quote-last">—</strong></div>
+    </div>
+    <p id="quote-status" class="muted" role="status">Choose a portfolio to load prices.</p>
+    <p class="muted">Quotes may be delayed. The brokerage does not provide a quote timestamp; the time shown is when this app retrieved the data.</p>
+    <button type="button" id="refresh-prices">Refresh prices</button>
+    <button type="button" id="use-quote" disabled>Use ask as buy limit</button>
+    <p>Available cash (USD): <strong id="account-cash">—</strong><br>Shares held: <strong id="account-shares">—</strong></p>
+  </section>
+  <p><strong id="order-cost-label">Maximum share cost</strong>: <strong id="order-cost">—</strong></p>
+  <p class="muted">Quantity × limit price, excluding fees. Buying may fill for less; selling may fill for more.</p>
+  <p id="order-budget-warning" class="error" role="status"></p>
+  <p>A buy limit is the maximum price you pay per share. A sell limit is the minimum price you accept. An order may wait for a matching price or expire.</p>
+  <p>Only connected Alpaca Paper accounts can trade here. Cash and holdings are checked before submission. Selling requires shares already held.</p>
+  <button type="submit" id="paper-order-button">Submit paper order</button>
+</form>
+</section>
+<noscript><p>Enable JavaScript to load quotes and calculate the order total. Submission still checks your cash and holdings.</p></noscript>
+<script src="{% static 'trading/paper_order.js' %}" defer></script>
+{% endblock %}

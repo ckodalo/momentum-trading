@@ -150,7 +150,8 @@ class TradingExecutor:
             raise ValueError("Paper orders support USD stocks only")
         return quote
 
-    def safe_api_error(self, exc, portfolio):
+    @staticmethod
+    def safe_api_error(exc, portfolio):
         """Expose useful error details without signed URLs or stored credentials."""
         details = type(exc).__name__
         status = getattr(exc, "status", None)

@@ -74,6 +74,23 @@ class TradingPageTests(TestCase):
 
 
 class PullMassiveDataTests(TestCase):
+    def test_default_uses_strategy_universe_and_ranks_all_five_groups(self):
+        from unittest.mock import patch
+        from django.test import override_settings
+        from trading.services.massive_client import MassiveAPIClient
+        with override_settings(MASSIVE_API_KEY="test-key"):
+            tickers = MassiveAPIClient().get_sp500_tickers()
+            self.assertEqual(len(set(tickers)), 50)
+            data = {ticker: {"price_12m": 100, "price_1m": 100 + i} for i, ticker in enumerate(tickers)}
+            with patch("trading.services.massive_client.MassiveAPIClient.fetch_bulk_momentum_data", return_value=data) as fetch:
+                output = self.run_command(date=date(2026, 1, 1))
+                self.assertEqual(fetch.call_args.kwargs["tickers"], tickers)
+                self.assertEqual(Stock.objects.count(), 50)
+                self.assertEqual(MomentumScore.objects.count(), 50)
+                self.assertIn("Saved 50 momentum scores", output)
+                for quintile in range(1, 6):
+                    self.assertEqual(MomentumScore.objects.filter(quintile=quintile).count(), 10)
+
     def run_command(self, **options):
         from io import StringIO
         from django.core.management import call_command
@@ -85,13 +102,13 @@ class PullMassiveDataTests(TestCase):
         from unittest.mock import patch
         from django.test import override_settings
         with override_settings(MASSIVE_API_KEY="test-key"), patch("trading.services.massive_client.MassiveAPIClient.fetch_bulk_momentum_data", return_value={"AAPL": {"price_12m": 100, "price_1m": 125}, "NVDA": {"price_12m": 100, "price_1m": 150}}) as fetch:
-            output = self.run_command(date=date(2026, 1, 1))
+            output = self.run_command(tickers=["AAPL", "NVDA"], date=date(2026, 1, 1))
             self.assertIn("Saved 2 momentum scores", output)
             self.assertEqual(Stock.objects.count(), 2)
             self.assertEqual(MomentumScore.objects.count(), 2)
             self.assertEqual(MomentumScore.objects.get(stock__ticker="NVDA").rank, 1)
             self.assertEqual(float(MomentumScore.objects.get(stock__ticker="AAPL").momentum_score), 0.25)
-            self.run_command(date=date(2026, 1, 1))
+            self.run_command(tickers=["AAPL", "NVDA"], date=date(2026, 1, 1))
             self.assertEqual(MomentumScore.objects.count(), 2)
             self.assertEqual(fetch.call_args.kwargs["calculation_date"], date(2026, 1, 1))
             user = User.objects.create_superuser(username="command-reader", password="test", email="")
@@ -125,7 +142,7 @@ class PullMassiveDataTests(TestCase):
         from django.test import override_settings
         errors = StringIO()
         with override_settings(MASSIVE_API_KEY="test-key"), patch("trading.services.massive_client.MassiveAPIClient.fetch_bulk_momentum_data", return_value={"AAPL": {"price_12m": 100, "price_1m": 125}}):
-            self.run_command(date=date(2026, 1, 1), stderr=errors)
+            self.run_command(tickers=["AAPL", "NVDA"], date=date(2026, 1, 1), stderr=errors)
             self.assertEqual(MomentumScore.objects.count(), 1)
             self.assertIn("NVDA", errors.getvalue())
 
